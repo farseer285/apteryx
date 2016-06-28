@@ -4197,12 +4197,12 @@ CU_TestInfo tests_rpc[] = {
     CU_TEST_INFO_NULL,
 };
 
-extern CU_TestInfo tests_database_internal[];
+extern CU_TestInfo tests_hashtree[];
 extern CU_TestInfo tests_database[];
 extern CU_TestInfo tests_callbacks[];
 
 static CU_SuiteInfo suites[] = {
-    { "Database Internal", suite_init, suite_clean, tests_database_internal },
+    { "Hashtree", suite_init, suite_clean, tests_hashtree },
     { "Database", suite_init, suite_clean, tests_database },
     { "Callbacks", suite_init, suite_clean, tests_callbacks },
     { "RPC", suite_init, suite_clean, tests_rpc },
