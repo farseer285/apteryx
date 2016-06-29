@@ -993,9 +993,14 @@ test_bitmap ()
     {
         pthread_create (&writers[i], NULL, (void *) &_bitmap_thread, (void *) i);
     }
-    usleep (TEST_SLEEP_TIMEOUT);
+    for (i = 0; i < bitmap_bits/2; i++)
+    {
+        pthread_join (writers[i], NULL);
+    }
     CU_ASSERT ((value = apteryx_get (path)) != NULL);
     CU_ASSERT (value && sscanf (value, "%"PRIx32, &bitmap) == 1)
+    if (bitmap != 0x0000FFFF)
+    	printf("\nbitmap = %08x\n", bitmap);
     CU_ASSERT (bitmap == 0x0000FFFF)
     free (value);
 
@@ -1504,7 +1509,7 @@ test_watch_count_callback (const char *path, const char *value)
     char *v;
     pthread_mutex_lock (&watch_count_lock);
     CU_ASSERT ((asprintf ((char **) &v, "%d", _cb_count)+1) != 0);
-    CU_ASSERT (strcmp ((char*)value, v) == 0);
+    CU_ASSERT (value && v && strcmp ((char*)value, v) == 0);
     free (v);
     _cb_count++;
     pthread_mutex_unlock (&watch_count_lock);
@@ -1860,6 +1865,8 @@ test_validate_order_callback (const char *path, const char *value)
 {
     int index;
     CU_ASSERT (sscanf (path, TEST_PATH"/entity/zones/private/%d", &index) == 1);
+    if (index != test_validate_order_index)
+            printf("index %d not == %d\n", index, test_validate_order_index);
     CU_ASSERT (index == test_validate_order_index);
     return 0;
 }
@@ -2875,7 +2882,7 @@ test_get_tree_indexed_provided ()
 {
     GNode *root, *node, *child;
 
-    CU_ASSERT (apteryx_index (TEST_PATH"/counters", test_index_cb));
+    CU_ASSERT (apteryx_index (TEST_PATH"/counters/", test_index_cb));
     CU_ASSERT (apteryx_provide (TEST_PATH"/counters/rx/pkts", test_provide_callback_100));
     CU_ASSERT (apteryx_provide (TEST_PATH"/counters/rx/bytes", test_provide_callback_1000));
     CU_ASSERT (apteryx_provide (TEST_PATH"/counters/tx/pkts", test_provide_callback_1000));

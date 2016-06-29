@@ -212,8 +212,7 @@ index_get (const char *path, GList **result)
     GList *iter = NULL;
 
     /* Retrieve a list of providers for this path */
-    indexers = cb_match (&index_list, path,
-            CB_MATCH_EXACT|CB_MATCH_WILD|CB_MATCH_CHILD);
+    indexers = config_get_indexers (path);
     if (!indexers)
     {
         *result = NULL;
@@ -292,8 +291,7 @@ validate_set (const char *path, const char *value)
     int32_t result = 0;
 
     /* Retrieve a list of validators for this path */
-    validators = cb_match (&validation_list, path,
-            CB_MATCH_EXACT|CB_MATCH_WILD|CB_MATCH_CHILD|CB_MATCH_WILD_PATH);
+    validators = config_get_validators (path);
     if (!validators)
         return 0;
 
@@ -368,8 +366,7 @@ notify_watchers (const char *path)
     size_t vsize;
 
     /* Retrieve a list of watchers for this path */
-    watchers = cb_match (&watch_list, path,
-            CB_MATCH_EXACT|CB_MATCH_WILD|CB_MATCH_CHILD|CB_MATCH_WILD_PATH);
+    watchers = config_get_watchers (path);
     if (!watchers)
         return;
 
@@ -446,8 +443,7 @@ provide_get (const char *path)
     GList *iter = NULL;
 
     /* Retrieve a list of providers for this path */
-    providers = cb_match (&provide_list, path,
-            CB_MATCH_EXACT|CB_MATCH_WILD|CB_MATCH_CHILD|CB_MATCH_WILD_PATH);
+    providers = config_get_providers (path);
     if (!providers)
         return 0;
 
@@ -524,8 +520,7 @@ find_proxy (const char **path, cb_info_t **proxy_pt)
     *proxy_pt = NULL;
 
     /* Retrieve a list of proxies for this path */
-    proxies = cb_match (&proxy_list, *path,
-            CB_MATCH_EXACT|CB_MATCH_WILD|CB_MATCH_CHILD);
+    proxies = config_get_proxies (*path);
     if (!proxies)
         return NULL;
 
@@ -557,7 +552,8 @@ find_proxy (const char **path, cb_info_t **proxy_pt)
         *proxy_pt = proxy;
         break;
     }
-    g_list_free_full (proxies, (GDestroyNotify) cb_release);
+    // TODO figure why this isn't a cb_release
+    g_list_free (proxies);
     return rpc_client;
 }
 
@@ -984,24 +980,8 @@ search_path (const char *path)
 
             /* Append any provided paths */
             GList *providers = NULL;
-            providers = cb_match (&provide_list, path, CB_MATCH_PART);
-            for (iter = providers; iter; iter = g_list_next (iter))
-            {
-                cb_info_t *provider = iter->data;
-                int len = strlen (path);
-                /* If there is a provider for a single node below here it may
-                 * show as a "*" entry in this list, which is not desirable */
-                if (strchr (provider->path, '*'))
-                    continue;
-                char *ptr, *provider_path = g_strdup (provider->path);
-                if ((ptr = strchr (&provider_path[len ? len : len+1], '/')) != 0)
-                    *ptr = '\0';
-                if (!g_list_find_custom (results, provider_path, (GCompareFunc) strcmp))
-                    results = g_list_append (results, provider_path);
-                else
-                    g_free (provider_path);
-            }
-            g_list_free_full (providers, (GDestroyNotify) cb_release);
+            providers = config_search_providers (path);
+            results = g_list_concat(results, providers);
         }
     }
     return results;
@@ -1213,25 +1193,8 @@ _traverse_paths (GList **pvlist, const char *path)
 
         /* Append any provided paths */
         GList *providers = NULL;
-        providers = cb_match (&provide_list, path_s, CB_MATCH_PART);
-        for (iter = providers; iter; iter = g_list_next (iter))
-        {
-            cb_info_t *provider = iter->data;
-            char *ptr, *ppath;
-            int len = strlen (path_s);
-
-            if (strcmp (provider->path, path_s) == 0)
-                continue;
-
-            ppath = g_strdup (provider->path);
-            if ((ptr = strchr (&ppath[len+1], '/')) != 0)
-                   *ptr = '\0';
-            if (!g_list_find_custom (children, ppath, (GCompareFunc) strcmp))
-                children = g_list_prepend (children, ppath);
-            else
-                g_free (ppath);
-        }
-        g_list_free_full (providers, (GDestroyNotify) cb_release);
+        providers = config_search_providers (path_s);
+        children = g_list_concat(children, providers);
     }
     for (iter = children; iter; iter = g_list_next (iter))
     {
@@ -1483,8 +1446,7 @@ main (int argc, char **argv)
 
     /* Initialise the database */
     db_init ();
-    /* Initialise callbacks to clients */
-    cb_init ();
+
     /* Configuration Set/Get */
     config_init ();
 
@@ -1526,7 +1488,7 @@ exit:
     DEBUG ("Exiting\n");
 
     /* Cleanup callbacks */
-    cb_shutdown ();
+    config_shutdown ();
     db_shutdown ();
     if (proxy_rpc)
     {

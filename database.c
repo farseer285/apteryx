@@ -25,6 +25,7 @@
 #include <glib.h>
 #include <inttypes.h>
 #include "internal.h"
+#define TEST 1
 #ifdef TEST
 #include <CUnit/CUnit.h>
 #include <CUnit/Basic.h>
@@ -126,24 +127,30 @@ bool
 db_delete_no_lock (const char *path, uint64_t ts)
 {
     bool ret = false;
-    if (ts == UINT64_MAX || ts == UINT64_MAX || ts >= db_timestamp_no_lock (path))
+    if (ts == UINT64_MAX || ts >= db_timestamp_no_lock (path))
     {
 
         struct hashtree_node *node = hashtree_path_to_node (root, path);
         if (node)
         {
+            uint64_t now = db_calculate_timestamp();
             struct hashtree_node *iter = node;
             struct hashtree_node *parent = hashtree_parent_get(node);
             while ((iter = hashtree_parent_get(iter)) != NULL)
             {
-                ((struct database_node*)iter)->timestamp = ts;
+                ((struct database_node*)iter)->timestamp = now;
             }
+
+            if (((struct database_node*)node)->value != NULL)
+            {
+                g_free(((struct database_node*)node)->value);
+            }
+
             hashtree_node_delete (root, node);
             if (parent)
             {
-                GList *children = hashtree_children_get(parent);
                 /* This is now a hanging node, remove it */
-                if (g_list_length(children) == 0 && ((struct database_node*)parent)->length == 0)
+                if (hashtree_empty(parent) && ((struct database_node*)parent)->length == 0)
                 {
                     char *parent_path = strdup(path);
                     if(strchr(parent_path, '/'))
@@ -151,7 +158,6 @@ db_delete_no_lock (const char *path, uint64_t ts)
                     db_delete_no_lock(parent_path, UINT64_MAX);
                     free(parent_path);
                 }
-                g_list_free(children);
             }
         }
         ret = true;
@@ -230,6 +236,22 @@ db_init ()
     pthread_rwlock_unlock (&db_lock);
 }
 
+static void
+db_purge (struct database_node *node)
+{
+	char *buf = NULL;
+    GList *children = hashtree_children_get(&node->hashtree_node);
+    printf("purging %s = %s\n", hashtree_node_to_path(&node->hashtree_node, &buf), node->value);
+    free(buf);
+    for (GList *iter = children; iter; iter = iter->next)
+    {
+       db_purge((struct database_node *)iter->data);
+    }
+    g_list_free(children);
+    if (node->value)
+        g_free(node->value);
+}
+
 void
 db_shutdown()
 {
@@ -242,6 +264,9 @@ db_shutdown()
         g_list_free_full (paths, g_free);
     }
     pthread_rwlock_wrlock (&db_lock);
+
+    db_purge((struct database_node *)root);
+
     hashtree_shutdown(root);
     root = NULL;
     pthread_rwlock_unlock (&db_lock);

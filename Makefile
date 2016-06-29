@@ -66,7 +66,7 @@ apteryx-sync: syncer.c libapteryx.so
 	@echo "Building $@"
 	$(Q)$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $< -L. -lapteryx $(EXTRA_LDFLAGS)
 
-alfred: alfred.c callbacks.c libapteryx.so
+alfred: alfred.c callbacks.c hashtree.c libapteryx.so
 	@echo "Building $@"
 	@$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $^ -L. -lapteryx $(EXTRA_LDFLAGS)
 
